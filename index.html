@@ -70,10 +70,11 @@ window.LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtA
 <div class="card" id="login">
   <img class="big" data-logo alt="">
   <h1 style="justify-content:center">Google Review Finder</h1>
-  <p class="sub" style="text-align:center">Enter password to continue.</p>
+  <p class="sub" style="text-align:center">Sign in to continue.</p>
+  <input type="text" id="un" placeholder="Username" autocomplete="username" autocapitalize="none" style="margin-bottom:10px">
   <input type="password" id="pw" placeholder="Password" autocomplete="current-password">
-  <label class="chk"><input type="checkbox" id="save" checked> Save password on this device</label>
-  <div class="err" id="lerr">Incorrect password. Please try again.</div>
+  <label class="chk"><input type="checkbox" id="save" checked> Remember me on this device</label>
+  <div class="err" id="lerr"></div>
   <button class="primary" id="unlock">Unlock</button>
 </div>
 
@@ -110,12 +111,7 @@ window.LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtA
 
 <script>
 // ===== CONFIG =====
-const AUTH={
-  remoteUrl:"https://raw.githubusercontent.com/playtiearngarden-bit/GOOG-REVIEW/refs/heads/main/credentials.json",
-  useRemote:true,
-  salt:"place_finder_salt_2024",
-  hash:"3c3cb49b3c87f1b8f23edf8d6e305343c1fb11d331df3720978a276164870aa7"
-};
+const AUTH={repo:"playtiearngarden-bit/GOOG-REVIEW",branch:"main",path:"credentials.json"};
 
 //CORE-START
 function sha256(m){
@@ -165,20 +161,29 @@ async function hashOf(s){
   return sha256(s);
 }
 async function creds(){
-  if(AUTH.useRemote&&AUTH.remoteUrl){
-    try{const c=new AbortController();setTimeout(()=>c.abort(),4000);
-      const r=await fetch(AUTH.remoteUrl+'?_='+Date.now(),{signal:c.signal});
-      if(r.ok){const j=await r.json();if(j&&j.hash)return{salt:j.salt||AUTH.salt,hash:j.hash}}}catch(e){}
+  const a=AUTH,t=Date.now(),src=[
+    ['https://api.github.com/repos/'+a.repo+'/contents/'+a.path+'?ref='+a.branch+'&_='+t,{Accept:'application/vnd.github.raw+json'}],
+    ['https://raw.githubusercontent.com/'+a.repo+'/refs/heads/'+a.branch+'/'+a.path+'?_='+t,{}]];
+  for(const [u,h] of src){
+    try{const c=new AbortController();setTimeout(()=>c.abort(),6000);
+      const r=await fetch(u,{headers:h,signal:c.signal});
+      if(r.ok){const j=await r.json();if(Array.isArray(j.users)){try{localStorage.setItem('placeid_users',JSON.stringify(j))}catch(e){}return j}}}catch(e){}
   }
-  return{salt:AUTH.salt,hash:AUTH.hash};
+  try{const j=JSON.parse(localStorage.getItem('placeid_users')||'null');if(j&&Array.isArray(j.users))return j}catch(e){}
+  return null;
 }
 async function login(){
-  const pw=$('pw').value.trim();if(!pw)return;
-  const c=await creds();
-  if((await hashOf(c.salt+':'+pw)).toLowerCase()===c.hash.toLowerCase()){
-    try{if($('save').checked)localStorage.setItem('placeid_pwd',pw);else localStorage.removeItem('placeid_pwd')}catch(e){}
-    $('login').style.display='none';$('app').style.display='block';
-  }else{$('lerr').style.display='block';$('pw').select()}
+  const u=$('un').value.trim().toLowerCase(),pw=$('pw').value;
+  if(!u||!pw)return;
+  const b=$('unlock');b.disabled=true;
+  const c=await creds();let ok=false,msg='Wrong username or password.';
+  if(!c)msg='Cannot reach the server. Check your internet and try again.';
+  else{const x=c.users.find(z=>z.username===u);ok=!!x&&(await hashOf((c.salt||'')+':'+u+':'+pw)).toLowerCase()===String(x.hash).toLowerCase()}
+  b.disabled=false;
+  if(ok){
+    try{if($('save').checked){localStorage.setItem('placeid_user',u);localStorage.setItem('placeid_pwd',pw)}else{localStorage.removeItem('placeid_user');localStorage.removeItem('placeid_pwd')}}catch(e){}
+    $('lerr').style.display='none';$('login').style.display='none';$('app').style.display='block';
+  }else{$('lerr').textContent=msg;$('lerr').style.display='block';$('pw').select()}
 }
 async function copy(t,l){
   try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(t);
@@ -193,9 +198,10 @@ function go(){
   const u='search.google.com/local/writereview?placeid='+r.id;
   $('rname').textContent=r.name;$('rurl').textContent=u;$('open').href='https://'+u;$('res').style.display='block';
 }
-try{const sp=localStorage.getItem('placeid_pwd');if(sp)$('pw').value=sp}catch(e){}
+try{const su=localStorage.getItem('placeid_user'),sp=localStorage.getItem('placeid_pwd');if(su)$('un').value=su;if(sp)$('pw').value=sp}catch(e){}
 $('unlock').onclick=login;
 $('pw').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+$('un').addEventListener('keydown',e=>{if(e.key==='Enter')$('pw').focus()});
 $('go').onclick=go;
 $('url').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 $('url').addEventListener('paste',()=>setTimeout(go,50));
