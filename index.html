@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Google Review Finder</title>
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#f1f5f9;color:#202124;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;width:100%;max-width:460px;border-radius:16px;padding:26px 22px;box-shadow:0 12px 32px rgba(0,0,0,.12)}
+h1{font-size:1.2rem;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+h1 img{width:34px;height:34px;object-fit:contain}
+.big{display:block;width:84px;height:84px;object-fit:contain;margin:0 auto 12px}
+.chk{display:flex;align-items:center;gap:8px;font-size:.85rem;color:#5f6368;margin-top:12px}
+p.sub{font-size:.85rem;color:#5f6368;margin-bottom:16px;line-height:1.45}
+input[type=password],input[type=text]{width:100%;padding:12px;border:1.5px solid #dadce0;border-radius:8px;font-size:1rem;outline:none}
+input:focus{border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.2)}
+button,a.btn{display:inline-flex;align-items:center;justify-content:center;padding:11px 16px;border-radius:8px;border:1px solid #dadce0;background:#fff;color:#3c4043;font-size:.9rem;font-weight:600;cursor:pointer;text-decoration:none}
+button.primary{background:#1a73e8;color:#fff;border-color:transparent;width:100%;margin-top:12px}
+.err{background:#fce8e6;color:#d93025;padding:8px 10px;border-radius:6px;font-size:.82rem;margin-top:10px;display:none}
+.res{display:none;margin-top:16px;background:#eef3fc;border:1px solid #cce0ff;border-radius:10px;padding:12px}
+.res .n{font-weight:700;margin-bottom:6px}
+.res .l{font-size:.68rem;font-weight:700;text-transform:uppercase;color:#1557b0;letter-spacing:.5px}
+.res .u{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;color:#1a73e8;word-break:break-all;margin:4px 0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1}
+ol{font-size:.82rem;color:#5f6368;margin:14px 0 0 18px;line-height:1.6}
+#app{display:none}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e8e3e;color:#fff;padding:10px 18px;border-radius:8px;font-size:.88rem;display:none}
+</style>
+</head>
+<body>
+<div class="card" id="login">
+  <img class="big" src="logo.png" alt="">
+  <h1 style="justify-content:center">Google Review Finder</h1>
+  <p class="sub" style="text-align:center">Enter password to continue.</p>
+  <input type="password" id="pw" placeholder="Password" autocomplete="current-password">
+  <label class="chk"><input type="checkbox" id="save" checked> Save password on this device</label>
+  <div class="err" id="lerr">Incorrect password. Please try again.</div>
+  <button class="primary" id="unlock">Unlock</button>
+</div>
+
+<div class="card" id="app">
+  <h1><img src="logo.png" alt=""> Google Review Finder</h1>
+  <p class="sub">Paste a Google Maps place link to get its direct review link.</p>
+  <input type="text" id="url" placeholder="Paste Google Maps link here" autocomplete="off">
+  <div class="err" id="uerr"></div>
+  <button class="primary" id="go">Get review link</button>
+  <div class="res" id="res">
+    <div class="n" id="rname"></div>
+    <div class="l">Google Review Direct Link</div>
+    <div class="u" id="rurl"></div>
+    <div class="row">
+      <button id="cpl">Copy link</button>
+      <a class="btn" id="open" target="_blank" rel="noopener noreferrer">Open &#8599;</a>
+      <button id="cpi">Copy Place ID</button>
+    </div>
+  </div>
+  <ol>
+    <li>Open Google Maps and find the business.</li>
+    <li>Copy the link (full address or the short Share link).</li>
+    <li>Paste it above.</li>
+  </ol>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== CONFIG =====
+const AUTH={
+  remoteUrl:"https://raw.githubusercontent.com/playtiearngarden-bit/GOOG-REVIEW/refs/heads/main/credentials.json",
+  useRemote:true,
+  salt:"place_finder_salt_2024",
+  hash:"3c3cb49b3c87f1b8f23edf8d6e305343c1fb11d331df3720978a276164870aa7"
+};
+
+//CORE-START
+function sha256(m){
+  const K=[],H=[];let p=0;
+  for(let c=2;p<64;c++){let ok=true;for(let d=2;d*d<=c;d++)if(c%d===0){ok=false;break}
+    if(ok){if(p<8)H[p]=Math.floor((Math.pow(c,.5)%1)*4294967296);K[p++]=Math.floor((Math.pow(c,1/3)%1)*4294967296)}}
+  const by=Array.from(new TextEncoder().encode(m)),l=by.length*8;
+  by.push(0x80);while(by.length%64!==56)by.push(0);
+  for(let i=7;i>=0;i--)by.push(i>=4?0:(l>>>(i*8))&255);
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));let h=H.slice();
+  for(let o=0;o<by.length;o+=64){
+    const w=[];for(let i=0;i<16;i++)w[i]=(by[o+4*i]<<24)|(by[o+4*i+1]<<16)|(by[o+4*i+2]<<8)|by[o+4*i+3];
+    for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];
+      w[i]=(w[i-16]+(rr(a,7)^rr(a,18)^(a>>>3))+w[i-7]+(rr(b,17)^rr(b,19)^(b>>>10)))|0}
+    let [a,b,c,d,e,f,g,hh]=h;
+    for(let i=0;i<64;i++){
+      const t1=(hh+(rr(e,6)^rr(e,11)^rr(e,25))+((e&f)^(~e&g))+K[i]+w[i])|0;
+      const t2=((rr(a,2)^rr(a,13)^rr(a,22))+((a&b)^(a&c)^(b&c)))|0;
+      hh=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0}
+    const v=[a,b,c,d,e,f,g,hh];h=h.map((x,i)=>(x+v[i])|0)}
+  return h.map(v=>(v>>>0).toString(16).padStart(8,'0')).join('');
+}
+function toPlaceId(a,b){
+  const buf=new Uint8Array(20);buf[0]=0x0A;buf[1]=0x12;buf[2]=0x09;buf[11]=0x11;
+  const x=BigInt('0x'+a),y=BigInt('0x'+b);
+  for(let i=0;i<8;i++){buf[3+i]=Number((x>>BigInt(8*i))&255n);buf[12+i]=Number((y>>BigInt(8*i))&255n)}
+  return btoa(String.fromCharCode.apply(null,buf)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function parseInput(t){
+  t=(t||'').trim();
+  if(/^ChIJ[\w-]{10,}$/.test(t))return{id:t,name:'Place ID'};
+  if(/^(https?:\/\/)?(maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(t))return{short:t};
+  let s=t;try{s=decodeURIComponent(t)}catch(e){}
+  const pid=s.match(/ChIJ[\w-]{20,}/);if(pid)return{id:pid[0],name:'Selected place'};
+  const m=s.match(/0x([0-9a-f]+):0x([0-9a-f]+)/i);
+  if(!m)return{error:'No place found in that link. Use the full link of a specific place (business page).'};
+  const n=s.match(/\/maps\/place\/([^\/@?]+)/);
+  return{id:toPlaceId(m[1],m[2]),name:n?n[1].replace(/\+/g,' '):'Selected place'};
+}
+//CORE-END
+
+const $=id=>document.getElementById(id);
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2000)}
+async function hashOf(s){
+  try{if(window.crypto&&crypto.subtle){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join('')}}catch(e){}
+  return sha256(s);
+}
+async function creds(){
+  if(AUTH.useRemote&&AUTH.remoteUrl){
+    try{const c=new AbortController();setTimeout(()=>c.abort(),4000);
+      const r=await fetch(AUTH.remoteUrl+'?_='+Date.now(),{signal:c.signal});
+      if(r.ok){const j=await r.json();if(j&&j.hash)return{salt:j.salt||AUTH.salt,hash:j.hash}}}catch(e){}
+  }
+  return{salt:AUTH.salt,hash:AUTH.hash};
+}
+async function login(){
+  const pw=$('pw').value.trim();if(!pw)return;
+  const c=await creds();
+  if((await hashOf(c.salt+':'+pw)).toLowerCase()===c.hash.toLowerCase()){
+    try{if($('save').checked)localStorage.setItem('placeid_pwd',pw);else localStorage.removeItem('placeid_pwd')}catch(e){}
+    $('login').style.display='none';$('app').style.display='block';
+  }else{$('lerr').style.display='block';$('pw').select()}
+}
+async function copy(t,l){
+  try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(t);
+    else{const a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.left='-9999px';document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
+    toast(l+' copied!')}catch(e){toast('Copy failed')}
+}
+let cur=null;
+async function resolveShort(u){
+  if(!/^https?:/i.test(u))u='https://'+u;
+  const px=[x=>'https://api.allorigins.win/get?url='+encodeURIComponent(x),x=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(x)];
+  for(const p of px){
+    try{const c=new AbortController();setTimeout(()=>c.abort(),9000);
+      const r=await fetch(p(u),{signal:c.signal});if(!r.ok)continue;
+      const t=await r.text();let body=t,fu='';
+      try{const j=JSON.parse(t);body=j.contents||'';fu=(j.status&&j.status.url)||''}catch(e){}
+      for(const c of [fu,body]){const x=parseInput(c);if(x.id)return x}
+    }catch(e){}
+  }
+  return null;
+}
+async function go(){
+  let r=parseInput($('url').value);
+  if(r.short){$('go').textContent='Opening short link...';r=await resolveShort(r.short)||{error:'Could not open the short link. Open it in your browser and paste the full address instead.'};$('go').textContent='Get review link'}
+  if(r.error){$('uerr').textContent=r.error;$('uerr').style.display='block';$('res').style.display='none';return}
+  $('uerr').style.display='none';cur=r;
+  const u='search.google.com/local/writereview?placeid='+r.id;
+  $('rname').textContent=r.name;$('rurl').textContent=u;$('open').href='https://'+u;$('res').style.display='block';
+}
+try{const sp=localStorage.getItem('placeid_pwd');if(sp)$('pw').value=sp}catch(e){}
+$('unlock').onclick=login;
+$('pw').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+$('go').onclick=go;
+$('url').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
+$('url').addEventListener('paste',()=>setTimeout(go,50));
+$('cpl').onclick=()=>cur&&copy('search.google.com/local/writereview?placeid='+cur.id,'Review link');
+$('cpi').onclick=()=>cur&&copy(cur.id,'Place ID');
+</script>
+</body>
+</html>
