@@ -55,14 +55,8 @@ ol{font-size:.82rem;color:#5f6368;margin:14px 0 0 18px;line-height:1.6}
     <div class="row">
       <button id="cpl">Copy link</button>
       <a class="btn" id="open" target="_blank" rel="noopener noreferrer">Open &#8599;</a>
-      <button id="cpi">Copy Place ID</button>
     </div>
   </div>
-  <ol>
-    <li>Open Google Maps and find the business.</li>
-    <li>Copy the link (full address or the short Share link).</li>
-    <li>Paste it above.</li>
-  </ol>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -105,7 +99,7 @@ function toPlaceId(a,b){
 function parseInput(t){
   t=(t||'').trim();
   if(/^ChIJ[\w-]{10,}$/.test(t))return{id:t,name:'Place ID'};
-  if(/^(https?:\/\/)?(maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(t))return{short:t};
+  if(/^(https?:\/\/)?(maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(t))return{error:'Short links are not supported. Paste the full Google Maps link.'};
   let s=t;try{s=decodeURIComponent(t)}catch(e){}
   const pid=s.match(/ChIJ[\w-]{20,}/);if(pid)return{id:pid[0],name:'Selected place'};
   const m=s.match(/0x([0-9a-f]+):0x([0-9a-f]+)/i);
@@ -144,22 +138,8 @@ async function copy(t,l){
     toast(l+' copied!')}catch(e){toast('Copy failed')}
 }
 let cur=null;
-async function resolveShort(u){
-  if(!/^https?:/i.test(u))u='https://'+u;
-  const px=[x=>'https://api.allorigins.win/get?url='+encodeURIComponent(x),x=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(x)];
-  for(const p of px){
-    try{const c=new AbortController();setTimeout(()=>c.abort(),9000);
-      const r=await fetch(p(u),{signal:c.signal});if(!r.ok)continue;
-      const t=await r.text();let body=t,fu='';
-      try{const j=JSON.parse(t);body=j.contents||'';fu=(j.status&&j.status.url)||''}catch(e){}
-      for(const c of [fu,body]){const x=parseInput(c);if(x.id)return x}
-    }catch(e){}
-  }
-  return null;
-}
-async function go(){
+function go(){
   let r=parseInput($('url').value);
-  if(r.short){$('go').textContent='Opening short link...';r=await resolveShort(r.short)||{error:'Could not open the short link. Open it in your browser and paste the full address instead.'};$('go').textContent='Get review link'}
   if(r.error){$('uerr').textContent=r.error;$('uerr').style.display='block';$('res').style.display='none';return}
   $('uerr').style.display='none';cur=r;
   const u='search.google.com/local/writereview?placeid='+r.id;
@@ -172,7 +152,6 @@ $('go').onclick=go;
 $('url').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 $('url').addEventListener('paste',()=>setTimeout(go,50));
 $('cpl').onclick=()=>cur&&copy('search.google.com/local/writereview?placeid='+cur.id,'Review link');
-$('cpi').onclick=()=>cur&&copy(cur.id,'Place ID');
 </script>
 </body>
 </html>
